@@ -17,9 +17,8 @@
 #include "copyright.h"
 #include "thread.h"
 #include "switch.h"
-#include "synch.h"
 #include "system.h"
-
+#include "stdio.h"
 #define STACK_FENCEPOST 0xdeadbeef	// this is put at the top of the
 // execution stack, for detecting
 // stack overflows
@@ -31,13 +30,17 @@
 //
 //	"threadName" is an arbitrary string, useful for debugging.
 //----------------------------------------------------------------------
-
-Thread::Thread(char* threadName)
+Thread::Thread(char* threadName, int joi)
 {
     name = threadName;
     stackTop = NULL;
     stack = NULL;
     status = JUST_CREATED;
+    priority = 0;
+    parentChecker = false;
+    isForked = false;
+    childChecker = false;
+    this->join = joi;
 #ifdef USER_PROGRAM
     space = NULL;
 #endif
@@ -87,6 +90,7 @@ Thread::~Thread()
 void
 Thread::Fork(VoidFunctionPtr func, int arg)
 {
+    isForked = true;
     DEBUG('t', "Forking thread \"%s\" with func = 0x%x, arg = %d\n",
           name, (int) func, arg);
 
@@ -143,12 +147,29 @@ Thread::CheckOverflow()
 void
 Thread::Finish ()
 {
+
+    childChecker = true;
+    if(parentChecker == false)
+    {
+	////printf("Child finish if\n");
+lk = new Lock("childLock");
+cCon = new Condition("ChildSleeper");
+
+    		lk->Acquire();
+		cCon->Wait(lk);
+    }
     (void) interrupt->SetLevel(IntOff);
     ASSERT(this == currentThread);
-
+ //   //printf("Child finish delete \n");
     DEBUG('t', "Finishing thread \"%s\"\n", getName());
 
     threadToBeDestroyed = currentThread;
+ //   //printf("value of pCon in child %d \n", pCon);
+    pCon->Signal(sn);
+ //   //printf("Please? \n");
+    if(lk != NULL)
+    lk->Release();
+//    //printf("Uhhhhhhh \n");
     Sleep();					// invokes SWITCH
     // not reached
 }
@@ -180,12 +201,16 @@ Thread::Yield ()
     ASSERT(this == currentThread);
 
     DEBUG('t', "Yielding thread \"%s\"\n", getName());
-
-    nextThread = scheduler->FindNextToRun();
-    if (nextThread != NULL) {
         scheduler->ReadyToRun(this);
+ 	nextThread = scheduler->FindNextToRun();
         scheduler->Run(nextThread);
-    }
+
+ //   nextThread = scheduler->FindNextToRun();
+
+   // if (nextThread != NULL) {
+    //    scheduler->ReadyToRun(this);
+     //   scheduler->Run(nextThread);
+    //}
     (void) interrupt->SetLevel(oldLevel);
 }
 
@@ -243,7 +268,42 @@ void ThreadPrint(int arg) {
     Thread *t = (Thread *)arg;
     t->Print();
 }
-
+void
+Thread::setPriority(int newPriority) {
+    priority = newPriority;
+}
+int 
+Thread::getPriority() {
+    return priority;
+}
+void
+Thread::Join() {
+////ASSERT TRYING TO JOIN ITSELF
+    ASSERT(isForked == true);
+ //   ASSERT(currentThread != this);
+    ASSERT( this->join == 1);
+    ASSERT( parentChecker != true );
+   
+    parentChecker = true;
+    //printf("Join start \n");
+    pCon = new Condition("ParentSleeper");
+    //printf("Value of pCon in parent %d \n", pCon);
+    sn = new Lock("Plck");
+    if(childChecker == false)
+    {
+	//printf("Join if \n");
+    	sn->Acquire();
+    	pCon->Wait(sn);
+    }
+    else
+    {
+	//printf("Join else \n");
+	sn->Acquire();
+	cCon->Signal(lk);
+	pCon->Wait(sn);
+    }
+    
+}
 //----------------------------------------------------------------------
 // Thread::StackAllocate
 //	Allocate and initialize an execution stack.  The stack is

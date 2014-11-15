@@ -1,0 +1,38 @@
+CSE 120 Project 1
+README
+Dhruv Kaushal, Archit Khosla, Anish Narsian
+
+
+Part 1: 
+
+Lock was implemented in a similar way to Semaphores. It has access to a queue to decide which threads to run right after a lock is released. Thread blocking is done using Thread->sleep. 
+Lock class also contains private variables like isHeld and LockHolder which help in determining if the Lock is held by the current thread for Assertions and error condition testing in both Acquire and Release. 
+The following things were tested: 1. If a thread already acquire a lock and we are doing that again, releasing without holding a lock, doing acceptable deletion, waiting for a cv without an associated lock, signaling a condition variable wakes only one thread and broadcasting wakes up all threads, (6) signaling and broadcasting to a condition variable with no waiters is a no-op, and future threads that wait will block (i.e., the signal/broadcast is "lost"), (7) a thread calling Signal holds the Lock passed in to Signal, and (8) deleting a lock or condition variable should have no threads on the wait queue. 
+
+
+
+Part 2: 
+
+This was implemented using a Condition variable meet as well as 2 locks recv and a message buffer list. While sending we acquire a lock, add the message to the List, signal receivers, and CV::wait the sender. Now at the receivers end we dequeue, if this is null then we wait for the sender else we signal the sender that we are ready to receive the data. New files mailbox.cc and h were created.
+We tested this part by having test cases with different combinations of senders and receivers waiting for each other, and we tracked the signaled threads to see if they were running in the correct order. 
+
+Part 3: 
+
+In this part a new Thread::Join method was created as well as code added to Thread::Finish(). We also added an instance variable to the thread constructor to enable us to know if we are going to be doing a join. Join and Finish were edited so that 2 booleans(bool ParentChecker and ChildChecker) were used and 2 condition variables to do the required blocking and signaling. This was implemented in this was so that the child would wait on the parent if it reaches finish and the parent hasn’t reached the Thread.join or secondly the parent would wait on the child if it reached join and the child had not reached finish. This was tested using different Test Cases such as: 1. If join is called on itself, should break out of this using Assertions. 2. If join is not allowed (While creating thread we say this Thread does not call join) and we call join. 3. Parent is still running and not called join while Child has finished, 4. Parent Calls join before child finishes.
+
+
+Part 4:
+
+To implement the priority, we implemented the getPriority() and setPriority(int) methods to the thread {cc, h} files made changes to the nachos scheduler where the threads were added to the readyQueue based on their priority. We used the predefined SortedInsert() function from the list to do it. Since SortedInsert added items in an increasing order, we multiplied the priorities of the threads by -1 so that the highest priorities would become the lowest and thus we would be able to use SortedInsert without modifying it. We also made similar changes to the locks, semaphores and condition variable waitlists. The thread::Yield() function was also changed so that if the highest priority thread calls yield, it context-switches to itself.
+To test our implementation, we created multiple threads with different priorities and context-switched them to see if the correct threads gets executed next.
+
+
+Part 5: 
+
+In this int variables were created to keep a track of the number of Males, Females and Matchmakers and 3 Semaphores were used for each of Males, Females and Matchmakers. Every time a new Male, Female or Matchmaker is created a lock is acquired and then we check number of each of the above variables to check if we can make a match, if so then we remove them from their respective semaphores and decrement the long variable values. Then we release the Lock. 
+
+Created multiple and equal number of Male, Female and Matchmaking and ensured that all of these exited. Next created some Males, Females and no Matchmakers and ensured that none exited. Created random orders of Male, Female and Matchmakers and ensured that the threads acted as required. 
+
+Each team member had nearly equal contribution for the project. We assigned different questions of the project to different people, and made sure that someone other than the original coder wrote the test cases for the question. 
+
+

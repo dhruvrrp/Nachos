@@ -35,7 +35,7 @@
 // into a register, a context switch might have occurred,
 // and some other thread might have called P or V, so the true value might
 // now be different.
-
+class Thread;
 class Semaphore {
 public:
     Semaphore(char* debugName, int initialValue);	// set initial value
@@ -77,12 +77,19 @@ public:
     void Release(); // they are both *atomic*
 
     bool isHeldByCurrentThread();	// true if the current thread
+	bool isHeldFunc()
+	{
+		return isHeld;
+	}
     // holds this lock.  Useful for
     // checking in Release, and in
     // Condition variable ops below.
 
 private:
     char* name;				// for debugging
+	Thread *lockOwner;
+	bool isHeld;
+	List *queue;
     // plus some other stuff you'll need to define
 };
 
@@ -137,6 +144,9 @@ public:
 
 private:
     char* name;
+	List* inWaitList;
     // plus some other stuff you'll need to define
 };
+
+
 #endif // SYNCH_H

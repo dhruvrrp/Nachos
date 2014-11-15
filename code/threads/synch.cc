@@ -25,6 +25,7 @@
 #include "synch.h"
 #include "system.h"
 
+#include "stdio.h"
 //----------------------------------------------------------------------
 // Semaphore::Semaphore
 // 	Initialize a semaphore, so that it can be used for synchronization.
@@ -66,8 +67,10 @@ Semaphore::P()
 {
     IntStatus oldLevel = interrupt->SetLevel(IntOff);	// disable interrupts
 
-    while (value == 0) { 			// semaphore not available
-        queue->Append((void *)currentThread);	// so go to sleep
+    while (value == 0) { 
+	queue->SortedInsert((void *) currentThread, (-1 * currentThread->getPriority()));
+			// semaphore not available
+     //   queue->Append((void *)currentThread);	// so go to sleep
         currentThread->Sleep();
     }
     value--; 					// semaphore available,
@@ -100,15 +103,105 @@ Semaphore::V()
 // Dummy functions -- so we can compile our later assignments
 // Note -- without a correct implementation of Condition::Wait(),
 // the test case in the network assignment won't work!
-Lock::Lock(char* debugName) {}
-Lock::~Lock() {}
-void Lock::Acquire() {}
-void Lock::Release() {}
-
-Condition::Condition(char* debugName) { }
-Condition::~Condition() { }
-void Condition::Wait(Lock* conditionLock) {
-    ASSERT(FALSE);
+Lock::Lock(char* debugName) 
+{
+	name = debugName;
+	isHeld = false;
+	lockOwner = NULL;
+	queue = new List;
+	
 }
-void Condition::Signal(Lock* conditionLock) { }
-void Condition::Broadcast(Lock* conditionLock) { }
+Lock::~Lock() 
+{
+	ASSERT(!isHeld);
+	delete queue;
+	delete lockOwner;	
+}
+void Lock::Acquire() 
+{
+	IntStatus oldLevel = interrupt->SetLevel(IntOff);	// disable interrupts
+
+	ASSERT(!isHeldByCurrentThread());	
+	
+    while (isHeld) { 
+	queue->SortedInsert((void *) currentThread, (-1 * currentThread->getPriority()));
+   //     queue->Append((void *)currentThread);	// so go to sleep
+        currentThread->Sleep();
+    }
+    // consume its value
+	isHeld = true;
+	lockOwner = currentThread;
+    (void) interrupt->SetLevel(oldLevel);	// re-enable interrupts
+	
+}
+void Lock::Release() 
+{
+	ASSERT(isHeldByCurrentThread());
+	ASSERT(isHeld);		
+	Thread *thread;
+    IntStatus oldLevel = interrupt->SetLevel(IntOff);
+
+    thread = (Thread *)queue->Remove();
+    if (thread != NULL)	   // make thread ready, consuming the V immediately
+        scheduler->ReadyToRun(thread);
+    isHeld = false;
+	lockOwner = NULL;
+    (void) interrupt->SetLevel(oldLevel);
+	
+	
+}
+bool Lock::isHeldByCurrentThread()
+{
+	return lockOwner == currentThread;
+}
+Condition::Condition(char* debugName) 
+{
+	name = debugName;
+	inWaitList = new List();
+}
+Condition::~Condition() 
+{
+	ASSERT(inWaitList->IsEmpty());
+	delete inWaitList;
+}
+void Condition::Wait(Lock* conditionLock) {
+////printf("On the list? \n");
+	ASSERT(conditionLock!=NULL);
+    IntStatus oldLevel = interrupt->SetLevel(IntOff);
+	ASSERT(conditionLock->isHeldByCurrentThread());
+
+	inWaitList->SortedInsert((void *)currentThread, (-1 * currentThread->getPriority()));
+	conditionLock->Release();
+//	inWaitList->Append((void*)currentThread);
+	currentThread->Sleep();
+	conditionLock->Acquire();
+	(void)interrupt->SetLevel(oldLevel);	
+}
+void Condition::Signal(Lock* conditionLock) 
+{ 
+	ASSERT(conditionLock!=NULL);
+	IntStatus oldLevel = interrupt->SetLevel(IntOff);
+//	ASSERT(conditionLock->isHeldByCurrentThread());
+	if (!inWaitList->IsEmpty())
+	{
+	//	//printf("How many off the list? \n");
+		Thread* waitingThread = (Thread *)inWaitList->Remove();
+		scheduler->ReadyToRun(waitingThread);
+	}
+	(void)interrupt->SetLevel(oldLevel);
+}
+void Condition::Broadcast(Lock* conditionLock)
+{ 
+	ASSERT(conditionLock!=NULL);
+	IntStatus oldLevel = interrupt->SetLevel(IntOff);
+//	ASSERT(conditionLock->isHeldByCurrentThread());
+
+	while (!inWaitList->IsEmpty())
+	{
+		Thread* waitingThread = (Thread *)inWaitList->Remove();
+		scheduler->ReadyToRun(waitingThread);
+	}
+	(void)interrupt->SetLevel(oldLevel);
+}
+
+

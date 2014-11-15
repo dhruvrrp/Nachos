@@ -39,6 +39,7 @@
 
 #include "copyright.h"
 #include "utility.h"
+#include "synch.h"
 
 #ifdef USER_PROGRAM
 #include "machine.h"
@@ -72,7 +73,10 @@ extern void ThreadPrint(int arg);
 //
 //  Some threads also belong to a user address space; threads
 //  that only run in the kernel have a NULL address space.
-
+//class Lock;
+//class Condition;
+class Lock;
+class Condition;
 class Thread {
 private:
     // NOTE: DO NOT CHANGE the order of these first two members.
@@ -81,14 +85,19 @@ private:
     int machineState[MachineStateSize];  // all registers except for stackTop
 
 public:
-    Thread(char* debugName);		// initialize a Thread
+    Thread(char* debugName, int join = 0);		// initialize a Thread
     ~Thread(); 				// deallocate a Thread
+    int priority;
+    int join;
+    bool isForked;
+    Condition *cCon, *pCon;
+    Lock *lk, *sn;
     // NOTE -- thread being deleted
     // must not be running when delete
     // is called
 
     // basic thread operations
-
+    void Join();
     void Fork(VoidFunctionPtr func, int arg); 	// Make thread run (*func)(arg)
     void Yield();  				// Relinquish the CPU if any
     // other thread is runnable
@@ -101,6 +110,8 @@ public:
     void setStatus(ThreadStatus st) {
         status = st;
     }
+    void setPriority(int newPriority);
+    int getPriority();
     char* getName() {
         return (name);
     }
@@ -110,13 +121,12 @@ public:
 
 private:
     // some of the private data for this class is listed above
-
     int* stack; 	 		// Bottom of the stack
     // NULL if this is the main thread
     // (If NULL, don't deallocate stack)
     ThreadStatus status;		// ready, running or blocked
     char* name;
-
+    bool childChecker, parentChecker;
     void StackAllocate(VoidFunctionPtr func, int arg);
     // Allocate a stack for thread.
     // Used internally by Fork()
